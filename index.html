@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>용해도 시뮬레이션</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+
+  :root {
+    --bg: #0d1b2a;
+    --surface: #112233;
+    --surface2: #162840;
+    --card: #1a3050;
+    --border: #2a4a6a;
+    --accent: #38bdf8;
+    --accent2: #22d3ee;
+    --kno3: #f97316;
+    --cuso4: #34d399;
+    --text: #e0f0ff;
+    --text-dim: #7aa0c0;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── START SCREEN ── */
+  #start-screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 40%, #0a2540 0%, #050d18 100%);
+    z-index: 100;
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  #start-screen.hide { opacity: 0; transform: scale(1.05); pointer-events: none; }
+
+  .start-bg-circles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .start-bg-circles span {
+    position: absolute; border-radius: 50%;
+    animation: pulse-circle 4s ease-in-out infinite;
+  }
+  .start-bg-circles span:nth-child(1) {
+    width: 600px; height: 600px; top: -150px; left: -150px;
+    background: radial-gradient(circle, rgba(56,189,248,.06) 0%, transparent 70%);
+  }
+  .start-bg-circles span:nth-child(2) {
+    width: 500px; height: 500px; bottom: -100px; right: -100px;
+    background: radial-gradient(circle, rgba(34,211,238,.05) 0%, transparent 70%);
+    animation-delay: 2s;
+  }
+  @keyframes pulse-circle {
+    0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.1);opacity:1}
+  }
+  .start-molecule {
+    position: absolute; border-radius: 50%;
+    animation: float-molecule linear infinite; opacity: 0;
+  }
+  @keyframes float-molecule {
+    0%{transform:translateY(100vh) scale(0);opacity:0}
+    10%{opacity:.6} 90%{opacity:.4}
+    100%{transform:translateY(-20px) scale(1);opacity:0}
+  }
+  .start-title {
+    font-size: 3rem; font-weight: 900;
+    background: linear-gradient(135deg,#38bdf8 0%,#22d3ee 50%,#34d399 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    text-align: center; letter-spacing: -.02em; margin-bottom: .4em;
+    animation: title-glow 3s ease-in-out infinite;
+  }
+  @keyframes title-glow {
+    0%,100%{filter:drop-shadow(0 0 20px rgba(56,189,248,.3))}
+    50%{filter:drop-shadow(0 0 40px rgba(56,189,248,.6))}
+  }
+  .start-subtitle { font-size:1rem; color:var(--text-dim); margin-bottom:3rem; letter-spacing:.05em; }
+  .btn-start {
+    padding:1rem 3.5rem; border-radius:50px;
+    background:linear-gradient(135deg,#0369a1,#0891b2);
+    border:2px solid var(--accent); color:#fff;
+    font-size:1.2rem; font-weight:700;
+    font-family:'Noto Sans KR',sans-serif;
+    cursor:pointer; letter-spacing:.1em;
+    box-shadow:0 0 30px rgba(56,189,248,.3),0 8px 24px rgba(0,0,0,.4);
+    transition:all .3s; position:relative; overflow:hidden;
+  }
+  .btn-start:hover{ transform:translateY(-3px); box-shadow:0 0 50px rgba(56,189,248,.5),0 12px 32px rgba(0,0,0,.5); }
+  .btn-start:active{ transform:translateY(0); }
+
+  /* ── MAIN APP ── */
+  #app { display:none; flex-direction:column; min-height:100vh; }
+  #app.show { display:flex; animation:app-enter .5s ease; }
+  @keyframes app-enter { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
+
+  .app-header {
+    background:linear-gradient(180deg,#0a1f35 0%,transparent 100%);
+    padding:.8rem 2rem; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .app-header h1 { font-size:1rem; font-weight:500; color:var(--text-dim); }
+  .header-right { display:flex; gap:.5rem; align-items:center; }
+  .header-badge {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:20px; padding:.3rem .8rem;
+    font-size:.8rem; color:var(--accent); font-weight:500;
+  }
+
+  .main-question {
+    text-align:center; padding:.8rem 2rem .6rem;
+    font-size:1.05rem; font-weight:700; color:var(--text);
+    background:linear-gradient(180deg,rgba(56,189,248,.05) 0%,transparent 100%);
+    border-bottom:1px solid rgba(56,189,248,.1);
+  }
+
+  .sim-layout {
+    flex:1; display:grid; grid-template-columns:1fr 1fr;
+    gap:1.2rem; padding:1rem 1.5rem;
+  }
+
+  /* ── GRAPH PANEL ── */
+  .graph-panel {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:1rem;
+    display:flex; flex-direction:column;
+  }
+  .substance-tabs { display:flex; gap:.5rem; margin-bottom:.8rem; }
+  .tab-btn {
+    padding:.4rem 1rem; border-radius:20px;
+    border:2px solid transparent;
+    font-size:.85rem; font-weight:600;
+    font-family:'Noto Sans KR',sans-serif;
+    cursor:pointer; transition:all .25s;
+  }
+  .tab-btn.kno3 { background:rgba(249,115,22,.1); border-color:rgba(249,115,22,.3); color:var(--kno3); }
+  .tab-btn.kno3.active { background:rgba(249,115,22,.25); border-color:var(--kno3); box-shadow:0 0 12px rgba(249,115,22,.3); }
+  .tab-btn.cuso4 { background:rgba(52,211,153,.1); border-color:rgba(52,211,153,.3); color:var(--cuso4); }
+  .tab-btn.cuso4.active { background:rgba(52,211,153,.25); border-color:var(--cuso4); box-shadow:0 0 12px rgba(52,211,153,.3); }
+  .tab-btn:hover { transform:translateY(-1px); }
+
+  .graph-container { flex:1; display:flex; align-items:stretch; min-height:0; }
+
+  /* Y-axis slider — label written horizontally above, slider below */
+  .y-slider-wrap {
+    display:flex; flex-direction:column; align-items:center;
+    width:52px; margin-right:6px; flex-shrink:0;
+  }
+  /* Rotated label — we use a fixed-size container so it doesn't flip text */
+  .y-label-container {
+    width:52px;
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:4px;
+  }
+  .y-label {
+    font-size:.6rem; color:var(--text-dim);
+    white-space:nowrap;
+    transform:rotate(-90deg);
+    display:inline-block;
+    transform-origin:center center;
+  }
+  .y-slider-inner {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:4px;
+  }
+  input[type=range].vertical {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    -webkit-appearance: slider-vertical;
+    appearance: slider-vertical;
+    width:28px; cursor:pointer; accent-color:var(--accent);
+    flex:1;
+  }
+  .y-value { font-size:.7rem; font-weight:700; color:var(--accent); white-space:nowrap; }
+
+  .graph-area {
+    flex:1; position:relative;
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius-sm); overflow:hidden; min-height:200px;
+  }
+  #graph-canvas { position:absolute; inset:0; width:100%; height:100%; }
+
+  /* X slider */
+  .x-slider-section { margin-top:.6rem; padding-left:58px; }
+  input[type=range].horizontal { width:100%; cursor:pointer; accent-color:var(--accent); }
+  .x-label { font-size:.7rem; color:var(--text-dim); text-align:center; margin-top:.3rem; }
+  .x-value { font-size:.75rem; font-weight:700; color:var(--accent); text-align:center; margin-top:.2rem; }
+
+  /* ── BEAKER PANEL ── */
+  .beaker-panel {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:1rem;
+    display:flex; flex-direction:column; align-items:center; gap:.6rem;
+  }
+
+  .water-mass-controls { display:flex; gap:.5rem; align-items:center; }
+  .water-btn {
+    padding:.3rem .8rem; border-radius:20px;
+    border:1.5px solid var(--border); background:var(--surface2);
+    color:var(--text-dim); font-size:.8rem;
+    font-family:'Noto Sans KR',sans-serif;
+    cursor:pointer; transition:all .2s; display:none;
+  }
+  .water-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(56,189,248,.1); }
+
+  .result-table {
+    width:100%; border-collapse:collapse;
+    border-radius:var(--radius-sm); overflow:hidden;
+    font-size:.78rem; transition:all .3s;
+  }
+  .result-table th {
+    background:var(--card); color:var(--text-dim);
+    padding:.4rem .5rem; font-weight:600; font-size:.72rem;
+    border:1px solid var(--border); text-align:center;
+  }
+  .result-table td {
+    padding:.45rem .5rem; border:1px solid var(--border);
+    text-align:center; font-weight:700; font-size:.82rem;
+    background:var(--surface2); color:var(--text);
+    transition:all .4s;
+  }
+  .result-table td.pending { color:var(--text-dim); font-weight:400; font-size:.75rem; }
+  .result-table td.val-over  { color:var(--danger); background:rgba(248,113,113,.1); }
+  .result-table td.val-under { color:var(--cuso4);  background:rgba(52,211,153,.1); }
+  .result-table td.val-exact { color:var(--accent); background:rgba(56,189,248,.1); }
+  .result-table td.msg-over  { color:var(--danger); background:rgba(248,113,113,.05); font-size:.75rem; font-weight:500; }
+  .result-table td.msg-under { color:var(--cuso4);  background:rgba(52,211,153,.05); font-size:.75rem; font-weight:500; }
+  .result-table td.msg-exact { color:var(--accent); background:rgba(56,189,248,.05); font-size:.75rem; font-weight:500; }
+
+  /* Beaker canvas wrapper — extra height for the spoon animation above */
+  .beaker-wrap {
+    position:relative; width:220px; height:320px; flex-shrink:0;
+  }
+  #beaker-canvas { position:absolute; inset:0; width:100%; height:100%; }
+
+  .btn-dissolve {
+    padding:.8rem 2.5rem; border-radius:50px;
+    background:linear-gradient(135deg,#0369a1,#0891b2);
+    border:2px solid var(--accent); color:#fff;
+    font-size:.95rem; font-weight:700;
+    font-family:'Noto Sans KR',sans-serif;
+    cursor:pointer; letter-spacing:.05em;
+    box-shadow:0 0 20px rgba(56,189,248,.2);
+    transition:all .3s; width:100%; max-width:220px;
+  }
+  .btn-dissolve:hover { transform:translateY(-2px); box-shadow:0 0 30px rgba(56,189,248,.4); }
+  .btn-dissolve:active { transform:translateY(0); }
+  .btn-dissolve:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+  .btn-advanced {
+    padding:.5rem 1.5rem; border-radius:50px;
+    border:1.5px solid rgba(251,191,36,.4);
+    background:rgba(251,191,36,.08); color:var(--warning);
+    font-size:.85rem; font-weight:600;
+    font-family:'Noto Sans KR',sans-serif;
+    cursor:pointer; transition:all .2s;
+  }
+  .btn-advanced:hover { background:rgba(251,191,36,.15); border-color:var(--warning); }
+  .btn-advanced.active { background:rgba(251,191,36,.2); border-color:var(--warning); }
+
+  .result-label { font-size:.75rem; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- ── START SCREEN ── -->
+<div id="start-screen">
+  <div class="start-bg-circles"><span></span><span></span></div>
+  <h1 class="start-title">용해도 시뮬레이션</h1>
+  <p class="start-subtitle">온도에 따라 물질이 얼마나 녹는지 확인해 보자</p>
+  <button class="btn-start" onclick="startApp()">시 작</button>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <header class="app-header">
+    <h1>🧪 용해도 시뮬레이션</h1>
+    <div class="header-right">
+      <button class="btn-advanced" id="btn-advanced" onclick="toggleAdvanced()">심화</button>
+      <div class="header-badge">중2 과학 · Ⅰ. 물질의 특성</div>
+    </div>
+  </header>
+
+  <div class="main-question">여러 가지 물질의 온도에 따른 용해도를 확인해 보자.</div>
+
+  <div class="sim-layout">
+
+    <!-- LEFT: GRAPH -->
+    <div class="graph-panel">
+      <div class="substance-tabs">
+        <button class="tab-btn kno3 active" id="tab-kno3" onclick="selectSubstance('KNO3')">질산 칼륨 (KNO₃)</button>
+        <button class="tab-btn cuso4" id="tab-cuso4" onclick="selectSubstance('CuSO4')">황산 구리(Ⅱ) (CuSO₄)</button>
+      </div>
+
+      <div class="graph-container">
+        <!-- Y-axis slider -->
+        <div class="y-slider-wrap">
+          <div class="y-label-container">
+            <span class="y-label">물질의 양(g) 조절</span>
+          </div>
+          <div class="y-slider-inner">
+            <input type="range" class="vertical" id="slider-amount"
+              min="0" max="200" value="30" step="1"
+              oninput="onAmountChange(this.value)">
+            <div class="y-value" id="val-amount">30 g</div>
+          </div>
+        </div>
+
+        <!-- Graph canvas -->
+        <div class="graph-area">
+          <canvas id="graph-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- X-axis slider -->
+      <div class="x-slider-section">
+        <input type="range" class="horizontal" id="slider-temp"
+          min="0" max="100" value="20" step="1"
+          oninput="onTempChange(this.value)">
+        <div class="x-label">물의 온도(℃) 조절</div>
+        <div class="x-value" id="val-temp">20 ℃</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: BEAKER -->
+    <div class="beaker-panel">
+      <div class="water-mass-controls" id="water-controls">
+        <span style="font-size:.8rem;color:var(--text-dim)">물의 질량:</span>
+        <button class="water-btn" data-mass="50" onclick="setWaterMass(50)">50 g</button>
+        <button class="water-btn active" data-mass="100" onclick="setWaterMass(100)">100 g</button>
+        <button class="water-btn" data-mass="150" onclick="setWaterMass(150)">150 g</button>
+      </div>
+
+      <table class="result-table" id="result-table">
+        <thead>
+          <tr>
+            <th>넣어준 물질의 양</th>
+            <th>최대로 녹을 수 있는 양</th>
+            <th>결과</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="rt-amount" class="pending">—</td>
+            <td id="rt-sol"    class="pending">—</td>
+            <td id="rt-msg"    class="pending">버튼을 눌러 보세요</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="beaker-wrap">
+        <canvas id="beaker-canvas" width="220" height="320"></canvas>
+      </div>
+
+      <button class="btn-dissolve" id="btn-dissolve" onclick="dissolve()">물질 녹이기</button>
+      <div class="result-label" id="result-label"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════════
+const SOLUBILITY = {
+  KNO3:  {0:13,10:21,20:32,30:46,40:64,50:85,60:110,70:138,80:169,90:202,100:246},
+  CuSO4: {0:14,10:17,20:20,30:25,40:29,50:34,60:40, 70:47, 80:55, 90:63, 100:73},
+};
+const COLORS = { KNO3:'#f97316', CuSO4:'#34d399' };
+const NAMES  = { KNO3:'질산 칼륨', CuSO4:'황산 구리(Ⅱ)' };
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let substance   = 'KNO3';
+let temp        = 20;
+let amount      = 30;
+let waterMass   = 100;
+let advancedMode = false;
+let dissolveState = 'idle'; // idle | dropping | stirring | dissolving | done
+
+// Animation state
+let dropAnim   = { active:false, y:0, targetY:0, progress:0 };
+let stirAnim   = { active:false, angle:0, frame:0, totalFrames:90 };
+let dissolveAnim = { active:false, particles:[], frame:0 };
+let animRafId  = null;
+// sediment particles — fixed random so they don't flicker on redraw
+let sedParticles = [];
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+function getSolubility(sub, t, wMass=100) {
+  const data = SOLUBILITY[sub];
+  const keys = Object.keys(data).map(Number).sort((a,b)=>a-b);
+  let lo = keys[0], hi = keys[keys.length-1];
+  for (let i=0;i<keys.length-1;i++){
+    if(t>=keys[i]&&t<=keys[i+1]){lo=keys[i];hi=keys[i+1];break;}
+  }
+  if(lo===hi) return data[lo]*wMass/100;
+  const frac=(t-lo)/(hi-lo);
+  return (data[lo]+(data[hi]-data[lo])*frac)*wMass/100;
+}
+
+// ══════════════════════════════════════════
+//  INIT MOLECULES ON START SCREEN
+// ══════════════════════════════════════════
+function createMolecules(){
+  const c=document.querySelector('#start-screen');
+  for(let i=0;i<20;i++){
+    const el=document.createElement('div');
+    el.className='start-molecule';
+    const s=4+Math.random()*8;
+    el.style.cssText=`left:${Math.random()*100}%;width:${s}px;height:${s}px;
+      background:${Math.random()>.5?'#38bdf8':'#34d399'};
+      animation-duration:${4+Math.random()*6}s;animation-delay:${Math.random()*5}s;`;
+    c.appendChild(el);
+  }
+}
+createMolecules();
+
+// ══════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════
+function startApp(){
+  document.getElementById('start-screen').classList.add('hide');
+  document.getElementById('app').classList.add('show');
+  setTimeout(()=>{ initGraph(); drawBeakerFrame(); }, 120);
+}
+
+// ══════════════════════════════════════════
+//  SUBSTANCE / SLIDERS
+// ══════════════════════════════════════════
+function selectSubstance(sub){
+  substance=sub;
+  document.getElementById('tab-kno3').classList.toggle('active',sub==='KNO3');
+  document.getElementById('tab-cuso4').classList.toggle('active',sub==='CuSO4');
+  resetDissolve();
+}
+function onTempChange(v){ temp=+v; document.getElementById('val-temp').textContent=temp+' ℃'; resetDissolve(); }
+function onAmountChange(v){ amount=+v; document.getElementById('val-amount').textContent=amount+' g'; resetDissolve(); }
+
+function resetDissolve(){
+  dissolveState='idle';
+  sedParticles=[];
+  updateFormula(false);
+  cancelAnimationFrame(animRafId);
+  drawBeakerFrame();
+  drawGraph();
+}
+
+// ══════════════════════════════════════════
+//  ADVANCED MODE
+// ══════════════════════════════════════════
+function toggleAdvanced(){
+  advancedMode=!advancedMode;
+  document.getElementById('btn-advanced').classList.toggle('active',advancedMode);
+  document.querySelectorAll('.water-btn').forEach(b=>b.style.display=advancedMode?'block':'none');
+  if(!advancedMode) setWaterMass(100);
+}
+function setWaterMass(m){
+  waterMass=m;
+  document.querySelectorAll('.water-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mass===m));
+  resetDissolve();
+}
+
+// ══════════════════════════════════════════
+//  FORMULA
+// ══════════════════════════════════════════
+function updateFormula(afterDissolve){
+  const elAmt = document.getElementById('rt-amount');
+  const elSol = document.getElementById('rt-sol');
+  const elMsg = document.getElementById('rt-msg');
+
+  if(!afterDissolve){
+    elAmt.className = elSol.className = elMsg.className = 'pending';
+    elAmt.textContent = '—';
+    elSol.textContent = '—';
+    elMsg.textContent = '버튼을 눌러 보세요';
+    document.getElementById('result-label').textContent = '';
+    return;
+  }
+
+  const sol  = getSolubility(substance, temp, waterMass);
+  const solR = Math.round(sol * 10) / 10;
+  const diff = Math.round((amount - sol) * 10) / 10;
+  const absD = Math.abs(diff);
+
+  elAmt.textContent = amount + ' g';
+  elSol.textContent = solR + ' g';
+
+  if(diff < -0.001){
+    // 더 녹일 수 있음
+    elAmt.className = 'val-under';
+    elSol.className = 'val-under';
+    elMsg.className = 'msg-under';
+    elMsg.textContent = absD + 'g만큼 더 녹일 수 있다';
+    document.getElementById('result-label').textContent = '✅ ' + absD + 'g만큼 더 녹일 수 있습니다.';
+  } else if(diff <= 0.001){
+    // 정확히 포화
+    elAmt.className = 'val-exact';
+    elSol.className = 'val-exact';
+    elMsg.className = 'msg-exact';
+    elMsg.textContent = '딱 맞게 녹았다 (포화 상태)';
+    document.getElementById('result-label').textContent = '✅ 정확히 포화 상태입니다.';
+  } else {
+    // 남는 물질 있음
+    elAmt.className = 'val-over';
+    elSol.className = 'val-over';
+    elMsg.className = 'msg-over';
+    elMsg.textContent = diff + 'g만큼 녹지 않고 남는다';
+    document.getElementById('result-label').textContent = '⚠ ' + diff + 'g이 녹지 않고 가라앉습니다.';
+  }
+}
+
+// ══════════════════════════════════════════
+//  DISSOLVE SEQUENCE  (drop → stir → dissolve)
+// ══════════════════════════════════════════
+function dissolve(){
+  if(dissolveState!=='idle') return;
+  document.getElementById('btn-dissolve').disabled=true;
+
+  // Beaker geometry (must match drawBeakerFrame)
+  const W=220,H=320;
+  const bx=35,bw=150,btop=60,bbottom=H-20,bh=bbottom-btop;
+  const waterRatio=waterMass/200;
+  const waterLevel=bbottom-bh*waterRatio;
+
+  // Phase 1: DROP
+  dissolveState='dropping';
+  dropAnim={
+    active:true,
+    y: btop - 60,           // start above beaker
+    targetY: waterLevel - 2, // land just at water surface
+    progress:0
+  };
+
+  cancelAnimationFrame(animRafId);
+  runAnimation();
+}
+
+function runAnimation(){
+  const W=220,H=320;
+  const bx=35,bw=150,btop=60,bbottom=H-20,bh=bbottom-btop;
+  const waterRatio=waterMass/200;
+  const waterLevel=bbottom-bh*waterRatio;
+
+  function tick(){
+    // ── PHASE 1: DROP ──
+    if(dissolveState==='dropping'){
+      dropAnim.progress+=0.04;
+      if(dropAnim.progress>=1){
+        dropAnim.progress=1;
+        dropAnim.active=false;
+        dissolveState='stirring';
+        stirAnim={active:true,angle:0,frame:0,totalFrames:100};
+        // build dissolve particles
+        buildDissolveParticles(bx,bw,waterLevel,bbottom);
+      }
+      drawBeakerFrame();
+      animRafId=requestAnimationFrame(tick);
+      return;
+    }
+
+    // ── PHASE 2: STIR ──
+    if(dissolveState==='stirring'){
+      stirAnim.frame++;
+      stirAnim.angle += Math.PI/12; // rotate spoon
+      if(stirAnim.frame>=stirAnim.totalFrames){
+        stirAnim.active=false;
+        dissolveState='dissolving';
+        dissolveAnim.frame=0;
+      }
+      drawBeakerFrame();
+      animRafId=requestAnimationFrame(tick);
+      return;
+    }
+
+    // ── PHASE 3: DISSOLVE ──
+    if(dissolveState==='dissolving'){
+      dissolveAnim.frame++;
+      // animate particles rising
+      dissolveAnim.particles.forEach(p=>{
+        p.y -= p.vy;
+        p.x += Math.sin(dissolveAnim.frame*0.05+p.phase)*0.4;
+        p.alpha = Math.max(0, 1 - dissolveAnim.frame/80);
+      });
+      if(dissolveAnim.frame>=80){
+        dissolveState='done';
+        document.getElementById('btn-dissolve').disabled=false;
+        updateFormula(true);
+      }
+      drawBeakerFrame();
+      if(dissolveState==='dissolving') animRafId=requestAnimationFrame(tick);
+      return;
+    }
+
+    // done
+    drawBeakerFrame();
+  }
+  animRafId=requestAnimationFrame(tick);
+}
+
+function buildDissolveParticles(bx,bw,waterLevel,bbottom){
+  const sol=getSolubility(substance,temp,waterMass);
+  const n=Math.min(Math.round(Math.min(amount,sol)/2)+8,40);
+  dissolveAnim.particles=[];
+  for(let i=0;i<n;i++){
+    dissolveAnim.particles.push({
+      x: bx+10+Math.random()*(bw-20),
+      y: waterLevel+10+Math.random()*(bbottom-waterLevel-15),
+      vy: 0.5+Math.random()*1.2,
+      r: 2+Math.random()*2,
+      alpha:1,
+      phase: Math.random()*Math.PI*2
+    });
+  }
+}
+
+// ══════════════════════════════════════════
+//  DRAW BEAKER FRAME  (called every animation tick)
+// ══════════════════════════════════════════
+function drawBeakerFrame(){
+  const canvas=document.getElementById('beaker-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=220,H=320;
+  ctx.clearRect(0,0,W,H);
+
+  const bx=35,bw=150,btop=60,bbottom=H-20,bh=bbottom-btop;
+  const waterRatio=waterMass/200;
+  const waterLevel=bbottom-bh*waterRatio;
+  const cx=bx+bw/2; // center x
+
+  // ── WATER ──
+  const wg=ctx.createLinearGradient(bx,waterLevel,bx,bbottom);
+  wg.addColorStop(0,'rgba(56,189,248,.32)'); wg.addColorStop(1,'rgba(14,116,200,.52)');
+  ctx.fillStyle=wg;
+  ctx.beginPath(); ctx.rect(bx+4,waterLevel,bw-8,bbottom-waterLevel); ctx.fill();
+
+  // Water surface shimmer
+  ctx.beginPath(); ctx.moveTo(bx+4,waterLevel); ctx.lineTo(bx+bw-4,waterLevel);
+  ctx.strokeStyle='rgba(147,220,255,.55)'; ctx.lineWidth=2; ctx.stroke();
+
+  // Water label
+  const wLabel=advancedMode?`물 ${waterMass}g`:'물 100g';
+  ctx.fillStyle='rgba(147,220,255,.75)'; ctx.font='bold 11px Noto Sans KR';
+  ctx.textAlign='center'; ctx.fillText(wLabel,cx,waterLevel+22);
+
+  const sol=getSolubility(substance,temp,waterMass);
+  const color=COLORS[substance];
+
+  // ── IDLE: substance pile ABOVE beaker lip (being poured) ──
+  if(dissolveState==='idle' && amount>0){
+    const pileH=Math.min(amount*0.45,32);
+    // Draw pile floating about 30px above water level
+    const pileY=waterLevel-55;
+    const sg=ctx.createRadialGradient(cx,pileY,0,cx,pileY,bw*0.25);
+    sg.addColorStop(0,color+'cc'); sg.addColorStop(1,color+'44');
+    ctx.fillStyle=sg;
+    ctx.beginPath();
+    ctx.ellipse(cx,pileY,bw*0.22,pileH*0.42,0,0,Math.PI*2);
+    ctx.fill();
+    // Crystals
+    for(let i=0;i<10;i++){
+      const px=cx+(Math.random()-.5)*bw*0.3;
+      const py=pileY+(Math.random()-.5)*pileH*0.6;
+      ctx.fillStyle=color; ctx.beginPath();
+      ctx.arc(px,py,1.5+Math.random()*2.5,0,Math.PI*2); ctx.fill();
+    }
+    // Dashed arrow indicating direction into water
+    ctx.strokeStyle=color+'88'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(cx,pileY+pileH*0.4+4); ctx.lineTo(cx,waterLevel-8); ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrow head
+    ctx.fillStyle=color+'aa';
+    ctx.beginPath(); ctx.moveTo(cx,waterLevel-4); ctx.lineTo(cx-5,waterLevel-14); ctx.lineTo(cx+5,waterLevel-14); ctx.closePath(); ctx.fill();
+  }
+
+  // ── DROPPING: substance falls from above ──
+  if(dissolveState==='dropping'){
+    const pileH=Math.min(amount*0.45,32);
+    const startY=btop-60+pileH*0.5;
+    const endY=waterLevel-6;
+    // ease-in-out
+    const t=dropAnim.progress;
+    const ease=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    const curY=startY+(endY-startY)*ease;
+    const sg=ctx.createRadialGradient(cx,curY,0,cx,curY,bw*0.22);
+    sg.addColorStop(0,color+'cc'); sg.addColorStop(1,color+'44');
+    ctx.fillStyle=sg;
+    ctx.beginPath();
+    ctx.ellipse(cx,curY,bw*0.2,pileH*0.4,0,0,Math.PI*2); ctx.fill();
+    for(let i=0;i<8;i++){
+      ctx.fillStyle=color; ctx.beginPath();
+      ctx.arc(cx+(Math.random()-.5)*bw*0.28,curY+(Math.random()-.5)*pileH*0.5,
+        1.5+Math.random()*2,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  // ── STIRRING: glass rod animation ──
+  if(dissolveState==='stirring'){
+    const a = stirAnim.angle;
+    const frame = stirAnim.frame;
+
+    // Bottom tip orbits a circle inside the beaker; rod stays vertical
+    const orbitR = bw * 0.26;
+    const orbitCY = (waterLevel + bbottom) / 2;
+    const tipX = cx + Math.cos(a) * orbitR;
+    const tipY = orbitCY + Math.sin(a) * orbitR * 0.38; // slight perspective ellipse
+
+    const rodTop = btop - 28; // sticks above beaker lip
+
+    // ── Submerged portion (below water surface, dimmer/tinted) ──
+    if(tipY > waterLevel) {
+      const subGrad = ctx.createLinearGradient(tipX, waterLevel, tipX, tipY);
+      subGrad.addColorStop(0, 'rgba(160,220,255,.40)');
+      subGrad.addColorStop(1, 'rgba(180,235,255,.60)');
+      ctx.strokeStyle = subGrad;
+      ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(tipX, waterLevel); ctx.lineTo(tipX, tipY); ctx.stroke();
+      // highlight stripe submerged
+      ctx.strokeStyle = 'rgba(255,255,255,.25)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(tipX - 1, waterLevel); ctx.lineTo(tipX - 1, tipY); ctx.stroke();
+    }
+
+    // ── Above-water portion (brighter glass) ──
+    const aboveGrad = ctx.createLinearGradient(tipX, rodTop, tipX, waterLevel);
+    aboveGrad.addColorStop(0,   'rgba(200,240,255,.30)'); // top fades (hand holds it)
+    aboveGrad.addColorStop(0.25,'rgba(230,248,255,.95)');
+    aboveGrad.addColorStop(1,   'rgba(210,238,255,.90)');
+    ctx.strokeStyle = aboveGrad;
+    ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(tipX, rodTop); ctx.lineTo(tipX, waterLevel); ctx.stroke();
+    // highlight stripe above water
+    ctx.strokeStyle = 'rgba(255,255,255,.50)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(tipX - 1, rodTop); ctx.lineTo(tipX - 1, waterLevel); ctx.stroke();
+
+    // ── Rounded bottom tip ──
+    ctx.fillStyle = 'rgba(210,245,255,.90)';
+    ctx.beginPath(); ctx.arc(tipX, tipY, 3, 0, Math.PI * 2); ctx.fill();
+
+    // ── Swirl ripples ──
+    ctx.setLineDash([2, 4]);
+    ctx.lineWidth = 1;
+    [0.28, 0.46, 0.64].forEach((r, i) => {
+      const rr = bw * r * 0.42;
+      const rot = a * (i % 2 === 0 ? 1 : -1);
+      const alpha = 0.15 + 0.15 * Math.sin(frame * 0.18 + i);
+      ctx.strokeStyle = color + Math.round(alpha * 255).toString(16).padStart(2,'0');
+      ctx.beginPath();
+      ctx.ellipse(cx, orbitCY, rr, rr * 0.32, rot, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  }
+
+  // ── DISSOLVING: rising particles ──
+  if(dissolveState==='dissolving'){
+    dissolveAnim.particles.forEach(p=>{
+      ctx.globalAlpha=p.alpha;
+      ctx.fillStyle=color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+  }
+
+  // ── DONE: show result ──
+  if(dissolveState==='done'){
+    // dissolved ions floating
+    const numDots=Math.min(Math.round(Math.min(amount,sol)/3)+5,28);
+    ctx.globalAlpha=0.35;
+    for(let i=0;i<numDots;i++){
+      ctx.fillStyle=color; ctx.beginPath();
+      ctx.arc(bx+12+(i*13)%(bw-24),waterLevel+12+(i*17)%(bbottom-waterLevel-18),
+        2+(i%3),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // sediment
+    if(amount>sol){
+      const rem=amount-sol;
+      const sedH=Math.min(rem*0.6,30);
+      // build fixed particles once
+      if(sedParticles.length===0){
+        for(let i=0;i<14;i++){
+          sedParticles.push({
+            x:bx+8+Math.random()*(bw-16),
+            y:bbottom-sedH*0.5+(Math.random()-.5)*sedH*0.5,
+            r:1.5+Math.random()*2.5
+          });
+        }
+      }
+      const sg2=ctx.createLinearGradient(0,bbottom-sedH,0,bbottom);
+      sg2.addColorStop(0,color+'66'); sg2.addColorStop(1,color+'bb');
+      ctx.fillStyle=sg2;
+      ctx.beginPath(); ctx.rect(bx+4,bbottom-sedH,bw-8,sedH); ctx.fill();
+      sedParticles.forEach(p=>{
+        ctx.fillStyle=color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      });
+    }
+  }
+
+  // ── BEAKER GLASS ──
+  ctx.strokeStyle='rgba(147,210,255,.55)'; ctx.lineWidth=3; ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(bx,btop); ctx.lineTo(bx,bbottom);
+  ctx.lineTo(bx+bw,bbottom); ctx.lineTo(bx+bw,btop);
+  ctx.stroke();
+
+  // Lip
+  ctx.beginPath(); ctx.moveTo(bx-8,btop); ctx.lineTo(bx+bw+8,btop);
+  ctx.stroke();
+
+  // Measurement ticks
+  [0.25,0.5,0.75].forEach(r=>{
+    const my=bbottom-bh*r;
+    ctx.beginPath(); ctx.moveTo(bx+4,my); ctx.lineTo(bx+16,my);
+    ctx.strokeStyle='rgba(147,210,255,.35)'; ctx.lineWidth=1; ctx.stroke();
+  });
+
+  // Highlight
+  const hlg=ctx.createLinearGradient(bx,0,bx+16,0);
+  hlg.addColorStop(0,'rgba(200,240,255,.16)'); hlg.addColorStop(1,'transparent');
+  ctx.fillStyle=hlg; ctx.beginPath(); ctx.rect(bx,btop,13,bh); ctx.fill();
+}
+
+// ══════════════════════════════════════════
+//  DRAW GRAPH
+// ══════════════════════════════════════════
+function initGraph(){
+  const canvas=document.getElementById('graph-canvas');
+  const ro=new ResizeObserver(()=>{
+    canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight; drawGraph();
+  });
+  ro.observe(canvas.parentElement);
+  canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight;
+  drawGraph();
+}
+
+function drawGraph(){
+  const canvas=document.getElementById('graph-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  if(!W||!H) return;
+
+  const PAD={top:18,right:18,bottom:40,left:46};
+  const gW=W-PAD.left-PAD.right;
+  const gH=H-PAD.top-PAD.bottom;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Background
+  ctx.fillStyle='#0f2030';
+  roundRect(ctx,PAD.left,PAD.top,gW,gH,8); ctx.fill();
+
+  const yMax=260;
+  const xSteps=[0,20,40,60,80,100];
+  const ySteps=[0,50,100,150,200,250];
+
+  // Grid
+  xSteps.forEach(xv=>{
+    const x=PAD.left+(xv/100)*gW;
+    ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,PAD.top); ctx.lineTo(x,PAD.top+gH); ctx.stroke();
+    ctx.fillStyle='rgba(160,200,230,.55)'; ctx.font='10px Noto Sans KR';
+    ctx.textAlign='center'; ctx.fillText(xv,x,PAD.top+gH+16);
+  });
+  ySteps.forEach(yv=>{
+    const y=PAD.top+gH-(yv/yMax)*gH;
+    ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD.left,y); ctx.lineTo(PAD.left+gW,y); ctx.stroke();
+    ctx.fillStyle='rgba(160,200,230,.55)'; ctx.font='10px Noto Sans KR';
+    ctx.textAlign='right'; ctx.fillText(yv,PAD.left-5,y+4);
+  });
+
+  // Axis labels
+  ctx.fillStyle='rgba(160,200,230,.7)'; ctx.font='10px Noto Sans KR';
+  ctx.textAlign='center'; ctx.fillText('온도 (℃)',PAD.left+gW/2,H-5);
+
+  // Y-axis label (rotated text on canvas)
+  ctx.save(); ctx.translate(10,PAD.top+gH/2);
+  ctx.rotate(-Math.PI/2); ctx.textAlign='center';
+  ctx.fillText('용해도 (g/물 100g)',0,0); ctx.restore();
+
+  // ── Draw ONLY active substance curve ──
+  const data=SOLUBILITY[substance];
+  const keys=Object.keys(data).map(Number).sort((a,b)=>a-b);
+  const color=COLORS[substance];
+
+  // Gradient fill under curve
+  const curvePoints=keys.map(t=>({
+    x:PAD.left+(t/100)*gW,
+    y:PAD.top+gH-Math.min(data[t]*waterMass/100,yMax)/yMax*gH
+  }));
+  const fillGrad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+gH);
+  fillGrad.addColorStop(0,color+'33'); fillGrad.addColorStop(1,color+'05');
+  ctx.beginPath();
+  curvePoints.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.lineTo(curvePoints[curvePoints.length-1].x,PAD.top+gH);
+  ctx.lineTo(curvePoints[0].x,PAD.top+gH);
+  ctx.closePath(); ctx.fillStyle=fillGrad; ctx.fill();
+
+  // Curve line
+  ctx.beginPath();
+  curvePoints.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.setLineDash([]); ctx.stroke();
+
+  // Curve label
+  const last=curvePoints[curvePoints.length-1];
+  ctx.fillStyle=color; ctx.font='bold 9px Noto Sans KR'; ctx.textAlign='right';
+  ctx.fillText(NAMES[substance],last.x-3,last.y-8);
+
+  // ── CROSSHAIR ──
+  const curSol=getSolubility(substance,temp,waterMass);
+  const crossX=PAD.left+(temp/100)*gW;
+  const crossY_sol=PAD.top+gH-Math.min(curSol,yMax)/yMax*gH;
+  const crossY_amt=PAD.top+gH-Math.min(amount,yMax)/yMax*gH;
+  const isOverSat=amount>curSol;
+
+  // Vertical dashed line (temp)
+  ctx.strokeStyle='rgba(56,189,248,.45)'; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(crossX,PAD.top); ctx.lineTo(crossX,PAD.top+gH); ctx.stroke();
+
+  // Horizontal dashed line (amount)
+  const amtColor=isOverSat?'rgba(248,113,113,.55)':'rgba(56,189,248,.45)';
+  ctx.strokeStyle=amtColor; ctx.lineWidth=1.5; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(PAD.left,crossY_amt); ctx.lineTo(PAD.left+gW,crossY_amt); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── INTERSECTION STAR (where the two dashed lines meet) ──
+  // This is the main observation point: (temperature, amount) crosshair
+  drawStar(ctx, crossX, crossY_amt, 9, 4, isOverSat?'#f87171':'#38bdf8', '#fff');
+
+  // Small dot on curve at current temp (solubility value)
+  ctx.beginPath(); ctx.arc(crossX,crossY_sol,4.5,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Connection line between star and curve dot (shows distance = how far from saturation)
+  if(Math.abs(crossY_amt-crossY_sol)>4){
+    ctx.strokeStyle=isOverSat?'rgba(248,113,113,.4)':'rgba(56,189,248,.3)';
+    ctx.lineWidth=1; ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(crossX,crossY_amt); ctx.lineTo(crossX,crossY_sol); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Axis value annotations
+  ctx.fillStyle='rgba(56,189,248,.9)'; ctx.font='bold 10px Noto Sans KR';
+  ctx.textAlign='center'; ctx.fillText(temp+'℃',crossX,PAD.top+gH+30);
+  ctx.textAlign='right'; ctx.fillStyle=isOverSat?'#f87171':'rgba(56,189,248,.9)';
+  ctx.fillText(amount+'g',PAD.left-3,crossY_amt+4);
+
+  // Solubility value label near curve dot
+  ctx.fillStyle=color; ctx.font='bold 10px Noto Sans KR'; ctx.textAlign='left';
+  const solR=Math.round(curSol*10)/10;
+  ctx.fillText(`용해도: ${solR}g`,crossX+7,crossY_sol-7);
+}
+
+// Draw a 5-pointed star
+function drawStar(ctx,cx,cy,outerR,innerR,fill,stroke){
+  ctx.beginPath();
+  for(let i=0;i<10;i++){
+    const angle=Math.PI/5*i - Math.PI/2;
+    const r=i%2===0?outerR:innerR;
+    const x=cx+Math.cos(angle)*r;
+    const y=cy+Math.sin(angle)*r;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.fillStyle=fill; ctx.fill();
+  // Glow
+  ctx.shadowColor=fill; ctx.shadowBlur=8;
+  ctx.strokeStyle=stroke; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.shadowBlur=0;
+  // Pulse ring
+  ctx.beginPath(); ctx.arc(cx,cy,outerR+4,0,Math.PI*2);
+  ctx.strokeStyle=fill+'55'; ctx.lineWidth=1; ctx.setLineDash([]);ctx.stroke();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+window.addEventListener('resize',()=>{ drawGraph(); drawBeakerFrame(); });
+</script>
+</body>
+</html>
