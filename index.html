@@ -38,7 +38,8 @@
   #start-screen {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+    align-items: center; justify-content: safe center;
+    padding: 2rem 16px; overflow-y: auto;
     background: radial-gradient(ellipse at 50% 40%, #0a2540 0%, #050d18 100%);
     z-index: 100;
     transition: opacity 0.6s ease, transform 0.6s ease;
@@ -95,6 +96,18 @@
   }
   .btn-start:hover{ transform:translateY(-3px); box-shadow:0 0 50px rgba(56,189,248,.5),0 12px 32px rgba(0,0,0,.5); }
   .btn-start:active{ transform:translateY(0); }
+  .privacy-officer {
+    position:relative; z-index:1;
+    margin-top:2.5rem; max-width:560px; width:100%;
+    padding:1rem 1.25rem; border-radius:var(--radius-sm);
+    background:rgba(17,34,51,.7); border:1px solid var(--border);
+    color:var(--text-dim); font-size:.82rem; line-height:1.7;
+    text-align:center; word-break:keep-all;
+  }
+  .privacy-officer h2 { font-size:.9rem; font-weight:700; color:var(--text); margin-bottom:.4rem; }
+  .privacy-officer p { margin:0; }
+  .privacy-officer .officer-info { margin-top:.6rem; color:var(--text); }
+  .privacy-officer .note { font-size:.75rem; color:var(--text-dim); }
 
   /* ── MAIN APP ── */
   #app { display:none; flex-direction:column; min-height:100vh; }
@@ -276,6 +289,12 @@
   <h1 class="start-title">용해도 시뮬레이션</h1>
   <p class="start-subtitle">온도에 따라 물질이 얼마나 녹는지 확인해 보자</p>
   <button class="btn-start" onclick="startApp()">시 작</button>
+  <section class="privacy-officer" aria-labelledby="privacy-officer-title">
+    <h2 id="privacy-officer-title">개인정보 보호책임자 안내</h2>
+    <p>본 서비스는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 개인정보 처리와 관련한 정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
+    <p class="officer-info">성명: 김시연 / 소속: 봉원중학교 / 직위: 교사<br>연락처: 02-879-1543</p>
+    <p class="note">(※ 개인정보보호를 위해 교사의 개인 휴대전화 번호는 기재하지 않습니다.)</p>
+  </section>
 </div>
 
 <!-- ── MAIN APP ── -->
